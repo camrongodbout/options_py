@@ -21,7 +21,10 @@ public:
 
   float calculate_option_price(float s, float k, float t, float r, float sigma, bool is_call, int n_paths, int n_steps);
 
-
+private:
+  curandState *d_state; // curand states on device
+  int n_paths_;
+  unsigned long long seed_;
 };
 
 

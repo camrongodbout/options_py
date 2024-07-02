@@ -1,7 +1,8 @@
 #ifndef MONTE_CARLO_CUH
 #define MONTE_CARLO_CUH
 
-void simulate_gbm_paths(float *d_paths, int n_paths, int n_steps, float s, float t, float r, float sigma, float dt);
-void calculate_payoffs(float *d_paths, float *d_payoffs, int n_paths, int n_steps, float k, float r, float t, bool is_call);
+void init_curand_states(curandState *state, int n_paths, unsigned long long seed);
+void monte_carlo_simulation(float *d_paths, float *d_payoffs, curandState *state, int n_paths, int n_steps, float s, float t, float r, float sigma, float dt, float k, bool is_call);
+
 
 #endif // MONTE_CARLO_CUH

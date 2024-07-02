@@ -35,5 +35,5 @@ target_link_libraries(options_py PRIVATE cuda_options pybind11::module ${CUDAToo
 
 set_target_properties(cuda_options PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON
-        CUDA_ARCHITECTURES "52"  # Change to your GPU's compute capability
+        CUDA_ARCHITECTURES "80"  # Change to your GPU's compute capability
 )
