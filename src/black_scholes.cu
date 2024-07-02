@@ -11,14 +11,22 @@ __device__ double black_scholes(double S, double K, double T, double r, double s
   return is_call ? call_price : call_price - S + K * exp(-r * T); // Put price
 }
 
-//// Inverse of the normal cumulative distribution function
-//__device__ double normcdf_inv(double p) {
-//  return sqrt(2) * erfcinv(2 * (1 - p));
-//}
-
 // Probability density function of the standard normal distribution
 __device__ double normpdf(double x) {
   return exp(-0.5 * x * x) / sqrt(2.0 * CUDART_PI);
+}
+
+// Bisection method as fallback
+__device__ double bisection(double S, double K, double T, double r, double market_price, bool is_call, double low, double high, double tolerance, int max_iterations) {
+  double mid;
+  for (int i = 0; i < max_iterations; ++i) {
+    mid = (low + high) / 2.0;
+    double price = black_scholes(S, K, T, r, mid, is_call);
+    if (fabs(price - market_price) < tolerance) break;
+    if (price < market_price) low = mid;
+    else high = mid;
+  }
+  return mid;
 }
 
 // Kernel function to find implied volatility
@@ -41,15 +49,42 @@ __global__ void find_implied_volatility_kernel(
     double market_price = option_prices[tid];
 
     double sigma = 0.2; // Initial guess
+    double low = 0.01;
+    double high = 10;
+    bool converged = false;
+
     for (int i = 0; i < max_iterations; ++i) {
       double price = black_scholes(S, K, T, risk_free_rate, sigma, true); // Assuming call option
       double vega = S * sqrt(T) * normpdf((log(S / K) + (risk_free_rate + 0.5 * sigma * sigma) * T) / (sigma * sqrt(T)));
 
       double diff = market_price - price;
-      if (fabs(diff) < tolerance) break;
+      if (fabs(diff) < tolerance) {
+        converged = true;
+        break;
+      }
 
-      sigma += diff / vega;
+      double update = diff / vega;
+      if (fabs(update) > 1.0) {
+        update = (update > 0) ? 1.0 : -1.0; // Limit update step size
+      }
+
+      sigma += update;
+
+      // Ensure sigma remains within bounds
+      if (sigma < low) {
+        sigma = low;
+        break;
+      } else if (sigma > high) {
+        sigma = high;
+        break;
+      }
     }
+
+    // If not converged, use bisection method
+    if (!converged) {
+      sigma = bisection(S, K, T, risk_free_rate, market_price, true, low, high, tolerance, max_iterations);
+    }
+
     volatilities[tid] = sigma;
   }
 }
