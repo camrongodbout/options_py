@@ -4,6 +4,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "../src/monte_carlo_options.h"
+#include "black_scholes.h"
 
 float calculateImpliedVolatility(float market_price, float s, float k, float t, float r, bool is_call, float tol, int max_iterations, int n_paths, int n_steps) {
   MonteCarloOptions mc;
@@ -34,4 +35,8 @@ PYBIND11_MODULE(options_py, m) {
   m.def("implied_vol_monte_carlo", &calculateImpliedVolatility, "Calculate implied volatility using Monte Carlo method",
         pybind11::arg("market_price"), pybind11::arg("s"), pybind11::arg("k"), pybind11::arg("t"), pybind11::arg("r"),
         pybind11::arg("is_call"), pybind11::arg("tol"), pybind11::arg("max_iterations"), pybind11::arg("n_paths"), pybind11::arg("n_steps"));
+
+  m.def("find_implied_volatility", &find_implied_volatility, "Find implied volatility using Black-Scholes model",
+         py::arg("option_prices"), py::arg("stock_prices"), py::arg("strikes"), py::arg("times"),
+         py::arg("risk_free_rate"), py::arg("tolerance"), py::arg("max_iterations"));
 }

@@ -27,7 +27,9 @@ file(GLOB_RECURSE LIB_SOURCES
 include_directories(src)
 include_directories(src/nodes)
 
-add_library(cuda_options SHARED ${LIB_SOURCES})
+add_library(cuda_options SHARED ${LIB_SOURCES}
+        src/black_scholes.cpp
+        src/black_scholes.h)
 target_link_libraries(cuda_options PRIVATE ${CUDAToolkit_LIBRARIES})
 
 pybind11_add_module(options_py bindings/bindings.cpp)

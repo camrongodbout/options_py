@@ -1,0 +1,93 @@
+#include "black_scholes.cuh"
+#include <cmath>
+#include <cuda_runtime.h>
+#include <math_constants.h>
+
+// Device function for the Black-Scholes formula
+__device__ double black_scholes(double S, double K, double T, double r, double sigma, bool is_call) {
+  double d1 = (log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * sqrt(T));
+  double d2 = d1 - sigma * sqrt(T);
+  double call_price = S * normcdf(d1) - K * exp(-r * T) * normcdf(d2);
+  return is_call ? call_price : call_price - S + K * exp(-r * T); // Put price
+}
+
+//// Inverse of the normal cumulative distribution function
+//__device__ double normcdf_inv(double p) {
+//  return sqrt(2) * erfcinv(2 * (1 - p));
+//}
+
+// Probability density function of the standard normal distribution
+__device__ double normpdf(double x) {
+  return exp(-0.5 * x * x) / sqrt(2.0 * CUDART_PI);
+}
+
+// Kernel function to find implied volatility
+__global__ void find_implied_volatility_kernel(
+  const double* __restrict__ option_prices,
+  const double* __restrict__ stock_prices,
+  const double* __restrict__ strikes,
+  const double* __restrict__ times,
+  double risk_free_rate,
+  double tolerance,
+  int max_iterations,
+  double* __restrict__ volatilities,
+  int n) {
+
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < n) {
+    double S = stock_prices[tid];
+    double K = strikes[tid];
+    double T = times[tid];
+    double market_price = option_prices[tid];
+
+    double sigma = 0.2; // Initial guess
+    for (int i = 0; i < max_iterations; ++i) {
+      double price = black_scholes(S, K, T, risk_free_rate, sigma, true); // Assuming call option
+      double vega = S * sqrt(T) * normpdf((log(S / K) + (risk_free_rate + 0.5 * sigma * sigma) * T) / (sigma * sqrt(T)));
+
+      double diff = market_price - price;
+      if (fabs(diff) < tolerance) break;
+
+      sigma += diff / vega;
+    }
+    volatilities[tid] = sigma;
+  }
+}
+
+void find_implied_volatility_cuda(
+  const double* option_prices,
+  const double* stock_prices,
+  const double* strikes,
+  const double* times,
+  double risk_free_rate,
+  double tolerance,
+  int max_iterations,
+  double* volatilities,
+  int n) {
+
+  double *d_option_prices, *d_stock_prices, *d_strikes, *d_times, *d_volatilities;
+  cudaMalloc(&d_option_prices, n * sizeof(double));
+  cudaMalloc(&d_stock_prices, n * sizeof(double));
+  cudaMalloc(&d_strikes, n * sizeof(double));
+  cudaMalloc(&d_times, n * sizeof(double));
+  cudaMalloc(&d_volatilities, n * sizeof(double));
+
+  cudaMemcpy(d_option_prices, option_prices, n * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_stock_prices, stock_prices, n * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_strikes, strikes, n * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_times, times, n * sizeof(double), cudaMemcpyHostToDevice);
+
+  int blockSize = 256;
+  int numBlocks = (n + blockSize - 1) / blockSize;
+  find_implied_volatility_kernel<<<numBlocks, blockSize>>>(
+    d_option_prices, d_stock_prices, d_strikes, d_times,
+    risk_free_rate, tolerance, max_iterations, d_volatilities, n);
+
+  cudaMemcpy(volatilities, d_volatilities, n * sizeof(double), cudaMemcpyDeviceToHost);
+
+  cudaFree(d_option_prices);
+  cudaFree(d_stock_prices);
+  cudaFree(d_strikes);
+  cudaFree(d_times);
+  cudaFree(d_volatilities);
+}
