@@ -7,7 +7,7 @@ std::vector<double> find_implied_volatility(
   const std::vector<double>& stock_prices,
   const std::vector<double>& strikes,
   const std::vector<double>& times,
-  double risk_free_rate,
+  const std::vector<double>& risk_free_rate,
   double tolerance,
   int max_iterations) {
 
@@ -19,7 +19,7 @@ std::vector<double> find_implied_volatility(
     stock_prices.data(),
     strikes.data(),
     times.data(),
-    risk_free_rate,
+    risk_free_rate.data(),
     tolerance,
     max_iterations,
     volatilities.data(),
