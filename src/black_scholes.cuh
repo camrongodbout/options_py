@@ -7,6 +7,7 @@ void find_implied_volatility_cuda(
   const double* strikes,
   const double* times,
   const double* risk_free_rate,
+  const char* isCalls,
   double tolerance,
   int max_iterations,
   double* volatilities,

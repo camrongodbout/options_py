@@ -36,6 +36,7 @@ __global__ void find_implied_volatility_kernel(
   const double* __restrict__ strikes,
   const double* __restrict__ times,
   const double* __restrict__ risk_free_rate,
+  const char* __restrict__ isCalls,
   double tolerance,
   int max_iterations,
   double* __restrict__ volatilities,
@@ -48,6 +49,7 @@ __global__ void find_implied_volatility_kernel(
     double T = times[tid];
     double market_price = option_prices[tid];
     double rfr = risk_free_rate[tid];
+    bool isCall = static_cast<bool>(isCalls[tid]);
 
     double sigma = 0.2; // Initial guess
     double low = 0.01;
@@ -55,7 +57,7 @@ __global__ void find_implied_volatility_kernel(
     bool converged = false;
 
     for (int i = 0; i < max_iterations; ++i) {
-      double price = black_scholes(S, K, T, rfr, sigma, true); // Assuming call option
+      double price = black_scholes(S, K, T, rfr, sigma, isCall); // Assuming call option
       double vega = S * sqrt(T) * normpdf((log(S / K) + (rfr + 0.5 * sigma * sigma) * T) / (sigma * sqrt(T)));
 
       double diff = market_price - price;
@@ -83,7 +85,7 @@ __global__ void find_implied_volatility_kernel(
 
     // If not converged, use bisection method
     if (!converged) {
-      sigma = bisection(S, K, T, rfr, market_price, true, low, high, tolerance, max_iterations);
+      sigma = bisection(S, K, T, rfr, market_price, isCall, low, high, tolerance, max_iterations);
     }
 
     volatilities[tid] = sigma;
@@ -96,30 +98,34 @@ void find_implied_volatility_cuda(
   const double* strikes,
   const double* times,
   const double* risk_free_rate,
+  const char* isCalls,
   double tolerance,
   int max_iterations,
   double* volatilities,
   int n) {
 
   double *d_option_prices, *d_stock_prices, *d_strikes, *d_times, *d_risk_free_rates, *d_volatilities;
+  char *d_is_calls;
   cudaMalloc(&d_option_prices, n * sizeof(double));
   cudaMalloc(&d_stock_prices, n * sizeof(double));
   cudaMalloc(&d_strikes, n * sizeof(double));
   cudaMalloc(&d_times, n * sizeof(double));
   cudaMalloc(&d_volatilities, n * sizeof(double));
   cudaMalloc(&d_risk_free_rates, n * sizeof(double));
+  cudaMalloc(&d_is_calls, n * sizeof(char));
 
   cudaMemcpy(d_option_prices, option_prices, n * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(d_stock_prices, stock_prices, n * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(d_strikes, strikes, n * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(d_times, times, n * sizeof(double), cudaMemcpyHostToDevice);
   cudaMemcpy(d_risk_free_rates, risk_free_rate, n * sizeof(double), cudaMemcpyHostToDevice);
+  cudaMemcpy(d_is_calls, isCalls, n * sizeof(char), cudaMemcpyHostToDevice);
 
   int blockSize = 256;
   int numBlocks = (n + blockSize - 1) / blockSize;
   find_implied_volatility_kernel<<<numBlocks, blockSize>>>(
     d_option_prices, d_stock_prices, d_strikes, d_times,
-    d_risk_free_rates, tolerance, max_iterations, d_volatilities, n);
+    d_risk_free_rates, d_is_calls, tolerance, max_iterations, d_volatilities, n);
 
   cudaMemcpy(volatilities, d_volatilities, n * sizeof(double), cudaMemcpyDeviceToHost);
 
@@ -128,5 +134,6 @@ void find_implied_volatility_cuda(
   cudaFree(d_strikes);
   cudaFree(d_times);
   cudaFree(d_risk_free_rates);
+  cudaFree(d_is_calls);
   cudaFree(d_volatilities);
 }

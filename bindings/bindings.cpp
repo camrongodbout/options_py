@@ -38,5 +38,5 @@ PYBIND11_MODULE(options_py, m) {
 
   m.def("calculateImpliedVolatilityBlackScholes", &find_implied_volatility, "Find implied volatility using Black-Scholes model",
          py::arg("option_prices"), py::arg("stock_prices"), py::arg("strikes"), py::arg("times"),
-         py::arg("risk_free_rate"), py::arg("tolerance"), py::arg("max_iterations"));
+         py::arg("risk_free_rate"), py::arg("isCalls"), py::arg("tolerance"), py::arg("max_iterations"));
 }
